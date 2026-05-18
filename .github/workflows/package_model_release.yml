@@ -19,64 +19,74 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Create package folder
+      - name: Inspect repo
+        run: |
+          echo "==== ROOT ===="
+          ls -la
+          echo "==== TREE ===="
+          find . -maxdepth 3 -type d
+
+      - name: Create package
         run: |
           rm -rf dist mindflux-minilm
           mkdir -p mindflux-minilm
 
-          # Required runtime pieces
-          cp -R Models mindflux-minilm/
-          cp -R Sources mindflux-minilm/
+          MODELS_DIR=$(find . -type d -name "Models" | head -n 1)
+          SOURCES_DIR=$(find . -type d -name "Sources" | head -n 1)
 
-          # Helpful docs if present
-          if [ -f README.md ]; then cp README.md mindflux-minilm/; fi
-          if [ -f Package.swift ]; then cp Package.swift mindflux-minilm/; fi
+          echo "Models dir: $MODELS_DIR"
+          echo "Sources dir: $SOURCES_DIR"
 
+          if [ -z "$MODELS_DIR" ]; then
+            echo "Models directory not found"
+            exit 1
+          fi
+
+          if [ -z "$SOURCES_DIR" ]; then
+            echo "Sources directory not found"
+            exit 1
+          fi
+
+          cp -R "$MODELS_DIR" mindflux-minilm/
+          cp -R "$SOURCES_DIR" mindflux-minilm/
+
+          if [ -f README.md ]; then
+            cp README.md mindflux-minilm/
+          fi
+
+          if [ -f Package.swift ]; then
+            cp Package.swift mindflux-minilm/
+          fi
+
+      - name: Create contents file
+        run: |
           cat > mindflux-minilm/CONTENTS.txt <<'EOF'
           MindFlux MiniLM CoreML Package
 
           Included:
           - Models/
-            CoreML model + tokenizer/vocab resources
           - Sources/
-            Swift tokenizer/inference/pooling/embedding code
-          - README.md if present
-          - Package.swift if present
 
-          Not included:
+          Optional:
+          - README.md
+          - Package.swift
+
+          Excluded:
           - Preview Content
-          - Xcode preview assets
+          - demo assets
           - conversion scripts
-          - unrelated demo UI assets
-
-          Intended use:
-          Bundle this package into MindFlux for on-device semantic embeddings.
           EOF
 
       - name: Zip package
         run: |
-          zip -r dist-mindflux-minilm.zip mindflux-minilm
           mkdir -p dist
-          mv dist-mindflux-minilm.zip dist/mindflux-minilm-coreml.zip
+          zip -r dist/mindflux-minilm-coreml.zip mindflux-minilm
 
-      - name: Create GitHub Release
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag_name }}
-          name: MindFlux MiniLM CoreML Package ${{ github.event.inputs.tag_name }}
-          body: |
-            Packaged CoreML MiniLM embedding engine for MindFlux.
-
-            Includes:
-            - Models/
-            - Sources/
-            - README.md if present
-            - Package.swift if present
-
-            Excludes:
-            - Preview Content
-            - conversion scripts
-            - demo-only assets
+          name: MindFlux MiniLM Package ${{ github.event.inputs.tag_name }}
           files: dist/mindflux-minilm-coreml.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
